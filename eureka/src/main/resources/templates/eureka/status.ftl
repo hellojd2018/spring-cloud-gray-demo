@@ -11,9 +11,38 @@
     <title>Eureka</title>
     <meta name="description" content="">
     <meta name="viewport" content="width=device-width">
-
     <link rel="stylesheet" href="eureka/css/wro.css">
+    <style type="text/css">
+        .mask {
+            position: absolute; top: 0px;
+            filter: alpha(opacity=60);
+            background-color: #777;
+            z-index: 10;
+            left: 0px;
+            opacity:0.5;
+            -moz-opacity:0.1;
+        }
+        .pop {
+            padding: 10px 6px;
+            position: fixed;
+        　　-moz-border-radius: 32px;
+        　　-webkit-border-radius: 32px;
+        　　border-radius: 32px;
+            left: 50%;
+            top: 50%;
+            width:800px;
+            height:400px;
+            margin-left:-400px;
+            margin-top:-200px;
+            background-color: #fff;
+            z-index: 100;
+            display: none;
+        }
 
+        .close{
+            font-size:12px;
+        }
+    </style>
 </head>
 
 <body id="one">
@@ -70,7 +99,11 @@
                                 data-app-name="${app.name}"
                                 class="status-mgr">上线实例</a>
                             <#else>
-                                <a href="javascript:void(0)">元数据管理</a>
+                                <a href="javascript:void(0)"
+                                   data-instance-id="${instance.id}"
+                                   data-app-name="${app.name}"
+                                   class="meta-mgr"
+                                >元数据管理</a>
                                 <a href="javascript:void(0)"
                                    data-action="OUT_OF_SERVICE"
                                    data-instance-id="${instance.id}"
@@ -125,8 +158,52 @@
         </tbody>
     </table>
 </div>
+<div id="mask" class="mask"></div>
+<div class="pop">
+    <div class="close">关闭</div>
+    <input type="hidden" name="instanceId" id="instanceId"/>
+    <input type="hidden" name="appName" id="appName"/>
+    <h1>元数据管理(实例名:<span class="instance"></span>)</h1>
+    <table id="metadata-table" class="table table-striped table-hover">
+        <thead>
+        <tr>
+            <th>名称</th>
+            <th>值</th>
+            <th>#</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <a href="javascript:void(0)" onclick="addMetadataRow()">添加一行</a>
+    <a href="javascript:void(0)" onclick="updateMetadata()">更新元数据</a>
+</div>
 <script type="text/javascript" src="eureka/js/wro.js" ></script>
 <script type="text/javascript">
+    function addMetadataRow() {
+        $("<tr><td><input /></td><td><input /></td><td><a class='metadata-del'>删除</a></td></tr>").appendTo("#metadata-table tbody");
+    }
+    function updateMetadata() {
+        var params = new Array();
+        $("#metadata-table tbody tr").each(function (i,n) {
+            var name=$("input:eq(0)",n).val();
+            if(name){
+                var value=$("input:eq(1)",n).val();
+                params.push(name+"="+value);
+            }
+        });
+        var appName=$("#appName").val();
+        var instanceId= $("#instanceId").val();
+        $.ajax({
+            url:"/eureka/apps/"+appName+"/"+instanceId+"/metadata?"+params.join("&"),
+            type:"PUT",
+            dataType:"text",
+            success:function(result){
+                alert("操作成功");
+                window.location.reload();
+            }
+        });
+    }
+
     $(document).ready(function() {
         $('table.stripeable tr:odd').addClass('odd');
         $('table.stripeable tr:even').addClass('even');
@@ -147,8 +224,8 @@
                 });
             }
         });
-
-        //
+        
+        //上线 下线
         $(".status-mgr").click(function () {
             var instanceId=$(this).attr("data-instance-id");
             var appName=$(this).attr("data-app-name");
@@ -162,6 +239,47 @@
                     window.location.reload();
                 }
             });
+        });
+        
+        $(".meta-mgr").click(function () {
+            var $pop=$(".pop");
+            var instanceId=$(this).attr("data-instance-id");
+            var appName=$(this).attr("data-app-name");
+            $("#appName").val(appName);
+            $("#instanceId").val(instanceId);
+            $(".instance",$pop).text(instanceId);
+            $.getJSON("/eureka/apps/"+appName+"/"+instanceId,function (resp) {
+                var  metadata=resp.instance.metadata;
+                var items= new Array();
+                for( name in metadata ) {
+                    var name_td=null;
+                    var value_td=null;
+                    var action_td=null;
+                    if (name=="management.port"){
+                        name_td="<td>"+name+"</td>"
+                        value_td="<td>"+metadata[name]+"</td>"
+                        action_td="<td></td>"
+                    }else {
+                        name_td="<td><input value='"+name+"' /></td>";
+                        value_td="<td><input value='"+metadata[name]+"' /></td>";
+                        action_td="<td><a class='metadata-del'>删除</a></td>"
+                    }
+                    items.push("<tr>"+name_td+value_td+action_td+"</tr>");
+                }
+                var $metadataBody=$("tbody",$pop);
+                $metadataBody.html(items);
+            });
+            $("#mask").css("height",$(document).height());
+            $("#mask").css("width",$(document).width());
+            $("#mask,.pop").show();
+        });
+
+        $(document).on("click",".metadata-del",function () {
+            $(this).parent("td").parent("tr").remove();
+        });
+
+        $(".close").click(function () {
+            $(".pop,#mask").hide();
         });
     });
 </script>
